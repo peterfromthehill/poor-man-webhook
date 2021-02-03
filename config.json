@@ -1,0 +1,30 @@
+{
+  "address": ":4443",
+  "namespace": "proxy",
+  "service": "poor-man-hook",
+  "caUrl": "https://acme.unusual.one/acme/development/directory",
+  "eMail": "poor-man-hook@1qay.net",
+  "clusterDomain": "cluster.local",
+  "restrictCertificatesToNamespace": false,
+  "servicePort": {
+    "name": "acme",
+    "port": 443
+  },
+  "proxy": {
+    "name": "poor-man-service-mesh",
+    "image": "peterfromthehill/poor-man-service-mesh",
+    "volumeMounts": []
+  },
+  "iptables": {
+    "name": "poor-man-service-mesh-iptables",
+    "image": "peterfromthehill/poor-man-service-mesh-iptables",
+    "securityContext": {
+      "privileged": true,
+      "capabilities": {
+        "add": [
+          "NET_ADMIN"
+        ]
+      }
+    }
+  }
+}
