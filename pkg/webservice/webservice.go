@@ -96,6 +96,10 @@ func mutate(config *config.Config, fmutate func(review *v1.AdmissionReview, conf
 		}
 		resp, err := json.Marshal(v1.AdmissionReview{
 			Response: response,
+			// TypeMeta: metav1.TypeMeta{
+			// 	Kind:       "AdmissionReview",
+			// 	APIVersion: "admission.k8s.io/v1",
+			// },
 		})
 		if err != nil {
 			klog.Info("Marshal error")

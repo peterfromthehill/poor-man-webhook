@@ -2,9 +2,7 @@ package mutating
 
 import (
 	"encoding/json"
-	"fmt"
 	"poor-man-webhook/pkg/config"
-	"strings"
 
 	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -38,27 +36,6 @@ func (p PodMutate) mkProxy(config *config.Config, podName, commonName, namespace
 	return r
 }
 
-func (p PodMutate) addContainers(existing, new []corev1.Container, path string) (ops []PatchOperation) {
-	if len(existing) == 0 {
-		return []PatchOperation{
-			{
-				Op:    "add",
-				Path:  path,
-				Value: new,
-			},
-		}
-	}
-
-	for _, add := range new {
-		ops = append(ops, PatchOperation{
-			Op:    "add",
-			Path:  path + "/-",
-			Value: add,
-		})
-	}
-	return ops
-}
-
 func (p PodMutate) patch(pod *corev1.Pod, namespace string, config *config.Config) ([]byte, error) {
 	var ops []PatchOperation
 
@@ -75,45 +52,10 @@ func (p PodMutate) patch(pod *corev1.Pod, namespace string, config *config.Confi
 		return nil, err
 	}
 
-	ops = append(ops, p.addContainers(pod.Spec.Containers, []corev1.Container{proxy}, "/spec/containers")...)
-	ops = append(ops, p.addContainers(pod.Spec.InitContainers, []corev1.Container{iptables}, "/spec/initContainers")...)
-
+	ops = append(ops, addContainers(pod.Spec.Containers, []corev1.Container{proxy}, "/spec/containers")...)
+	ops = append(ops, addContainers(pod.Spec.InitContainers, []corev1.Container{iptables}, "/spec/initContainers")...)
+	ops = append(ops, addAnnotations(pod.Annotations, map[string]string{AdmissionWebhookStatusKey: AdmissionWebhookStatusValue})...)
 	return json.Marshal(ops)
-}
-
-func (p PodMutate) ShouldMutate(metadata *metav1.ObjectMeta, namespace string, clusterDomain string, restrictToNamespace bool) (bool, error) {
-	annotations := metadata.GetAnnotations()
-	if annotations == nil {
-		annotations = map[string]string{}
-	}
-
-	// Only mutate if the object is annotated appropriately (annotation key set) and we haven't
-	// mutated already (status key isn't set).
-	// if annotations[admissionWebhookAnnotationKey] == "" || annotations[admissionWebhookStatusKey] == "injected" {
-	// 	return false, nil
-	// }
-
-	if annotations[AdmissionWebhookStatusKey] == "injected" {
-		return false, nil
-	}
-
-	if !restrictToNamespace {
-		return true, nil
-	}
-
-	subject := strings.Trim(annotations[AdmissionWebhookAnnotationKey], ".")
-
-	err := fmt.Errorf("subject \"%s\" matches a namespace other than \"%s\" and is not permitted. This check can be disabled by setting restrictCertificatesToNamespace to false in the autocert-config ConfigMap", subject, namespace)
-
-	if strings.HasSuffix(subject, ".svc") && !strings.HasSuffix(subject, fmt.Sprintf(".%s.svc", namespace)) {
-		return false, err
-	}
-
-	if strings.HasSuffix(subject, fmt.Sprintf(".svc.%s", clusterDomain)) && !strings.HasSuffix(subject, fmt.Sprintf(".%s.svc.%s", namespace, clusterDomain)) {
-		return false, err
-	}
-
-	return true, nil
 }
 
 // mutate takes an `AdmissionReview`, determines whether it is subject to mutation, and returns
@@ -132,7 +74,7 @@ func (p PodMutate) Mutate(review *v1.AdmissionReview, config *config.Config) *v1
 		}
 	}
 
-	mutationAllowed, validationErr := p.ShouldMutate(&pod.ObjectMeta, request.Namespace, config.GetClusterDomain(), config.RestrictCertificatesToNamespace)
+	mutationAllowed, validationErr := p.ShouldMutate(&pod, config, request.Namespace, config.GetClusterDomain(), config.RestrictCertificatesToNamespace)
 
 	if validationErr != nil {
 		klog.Info("Validation error")
