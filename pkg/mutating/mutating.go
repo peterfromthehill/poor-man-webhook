@@ -9,6 +9,7 @@ import (
 	v1 "k8s.io/api/admission/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 )
 
 type MutateT struct {
@@ -31,14 +32,17 @@ const (
 )
 
 func (s MutateT) ShouldMutate(object interface{}, config *config.Config, namespace string, clusterDomain string, restrictToNamespace bool) (bool, error) {
-	var pod corev1.Pod
-	var service corev1.Service
+	var pod *corev1.Pod
+	var service *corev1.Service
 	var objectMeta metav1.ObjectMeta
+	klog.Infof("Type: %s", object)
 	switch o := object.(type) {
-	case corev1.Service:
+	case *corev1.Service:
+		klog.Infof("Check if service should be mutate")
 		service = o
 		objectMeta = service.ObjectMeta
-	case corev1.Pod:
+	case *corev1.Pod:
+		klog.Infof("Check if pod should be mutate")
 		pod = o
 		objectMeta = pod.ObjectMeta
 	}
@@ -47,6 +51,7 @@ func (s MutateT) ShouldMutate(object interface{}, config *config.Config, namespa
 	if annotations == nil {
 		annotations = map[string]string{}
 	}
+	klog.Infof("Annotations: %w", annotations)
 
 	if annotations[AdmissionWebhookIgnoreKey] != "" {
 		b, err := strconv.ParseBool(annotations[AdmissionWebhookIgnoreKey])
